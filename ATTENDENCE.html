@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BS Physics Attendance Pro</title>
+
+<!-- PDF Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<style>
+body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #74ebd5, #9face6); margin: 0; }
+.container { width: 95%; margin: 20px auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+h2 { text-align: center; }
+.controls { display: flex; justify-content: space-between; margin-bottom: 15px; }
+button { padding: 8px 12px; border: none; background: #3498db; color: white; border-radius: 6px; cursor: pointer; }
+button:hover { background: #2980b9; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid #ddd; padding: 5px; text-align: center; }
+th { background: #2c3e50; color: white; font-size: 12px; }
+.percent { font-weight: bold; color: green; }
+.off { background: #ffcccc !important; }
+</style>
+</head>
+
+<body>
+<div class="container">
+<h2>📘 BS Physics - 8th Semester Attendance</h2>
+
+<div class="controls">
+<div>
+Month: <input type="text" id="month" value="March">
+Year: <input type="number" id="year" value="2026">
+</div>
+
+<div>
+<button onclick="openAttendance()">📝 Take Attendance</button>
+<button onclick="calculate()">📊 Calculate %</button>
+<button onclick="downloadPDF()">📄 Download PDF</button>
+<button onclick="downloadExcel()">📊 Download Excel</button>
+</div>
+</div>
+
+<table id="mainTable">
+<thead></thead>
+<tbody id="body"></tbody>
+</table>
+</div>
+
+<!-- Attendance Modal -->
+<div id="attendanceBox" style="display:none; background:white; padding:15px; position:fixed; top:10%; left:10%; width:80%; height:80%; overflow:auto; box-shadow:0 0 20px black;">
+<h3>Daily Attendance</h3>
+Date: <input type="number" id="dayInput" min="1" max="31">
+<label><input type="checkbox" id="offDay"> Mark as OFF Day</label>
+<table id="dailyTable"></table>
+<br>
+<button onclick="submitAttendance()">✅ Submit</button>
+<button onclick="closeBox()">❌ Close</button>
+</div>
+
+<script>
+// STUDENTS
+let students = [
+["Gipkp-21-2","Sidra Saeed"], ["Gipkp-21-3","Hafiza Aliza Abid"], ["Gipkp-21-4","Mahrukh Falak"],
+["Gipkp-21-5","M Ahsan"], ["Gipkp-21-6","Rida Amjad"], ["Gipkp-21-8","Laiba Hanif"],
+["Gipkp-21-9","Sehreen Arzoo"], ["Gipkp-21-10","Tayyaba Sartaj"], ["Gipkp-21-12","Amna Afzal"],
+["Gipkp-21-13","Maryam Rafiq"], ["Gipkp-21-14","Ume Aiman"], ["Gipkp-21-15","Shabnoor"],
+["Gipkp-21-17","Muniza Rehman"], ["Gipkp-21-18","Malaika Sehar"], ["Gipkp-21-19","Hafiz Nouman Jamil"],
+["Gipkp-21-20","Almas Bibi"], ["Gipkp-21-24","M Tayyab"], ["Gipkp-21-25","Aqdas Jabeen"],
+["Gipkp-21-26","Amna Bibi"], ["Gipkp-21-27","Muqadas Irshad"], ["Gipkp-21-29","Sana"],
+["Gipkp-21-31","Rana Shahbaz Ali"], ["Gipkp-21-32","Sadaf Riaz"], ["Gipkp-21-33","Aiman"],
+["Gipkp-21-34","Dilawar Khan"], ["Gipkp-21-35","Ayesha Javed"], ["Gipkp-21-36","Maha Shahid"],
+["Gipkp-21-38","Fatima Ashraf"], ["Gipkp-21-40","Sobia Iqbal"], ["Gipkp-21-41","Ayesha Saddiq"],
+["Gipkp-21-42","Rimsha"], ["Gipkp-21-43","Mahreen Zarif"], ["Gipkp-21-45","Arzoo Irfan"],
+["Gipkp-21-46","Rimsha"], ["Gipkp-21-47","Tayyaba Batool"], ["Gipkp-21-48","Abdullah"],
+["Gipkp-21-49","Fatima Bibi"], ["Gipkp-21-50","Hamna Yasmin"], ["Gipkp-21-51","Hameed Ahmad"],
+["Gipkp-21-52","Umaima"], ["Gipkp-21-54","Ayesha Naseem"], ["Gipkp-21-55","Qurrat Ul Ain Zahra"],
+["Gipkp-21-56","Aman Qadeer"], ["Gipkp-21-58","M Hamza"], ["Gipkp-21-60","Shehwar"]
+];
+
+// Load attendance from localStorage
+let attendanceData = JSON.parse(localStorage.getItem("attendanceData")) || {};
+let offDays = new Set(JSON.parse(localStorage.getItem("offDays")) || []);
+
+function generateTable(){
+    let year = document.getElementById("year").value;
+    let month = document.getElementById("month").value;
+    let mIndex = new Date(Date.parse(month+" 1, "+year)).getMonth();
+    let days = new Date(year, mIndex+1, 0).getDate();
+    let head = "<tr><th>Roll</th><th>Name</th>";
+    for(let d=1; d<=days; d++){
+        let date = new Date(year, mIndex, d);
+        let day = date.toLocaleString('en-us',{weekday:'short'});
+        let offClass = offDays.has(d) ? "off" : "";
+        head += `<th id="h${d}" class="${offClass}">${day}<br>${d}</th>`;
+    }
+    head += "<th>%</th></tr>";
+    document.querySelector("#mainTable thead").innerHTML = head;
+
+    let body="";
+    students.forEach(s=>{
+        body+="<tr><td>"+s[0]+"</td><td>"+s[1]+"</td>";
+        for(let i=1;i<=days;i++){
+            let key = `${s[0]}-${i}`;
+            let mark = attendanceData[key] || "";
+            body+=`<td id="cell-${key}">${mark}</td>`;
+        }
+        body+="<td class='percent'>0%</td></tr>";
+    });
+    document.getElementById("body").innerHTML = body;
+    calculate();
+}
+
+function openAttendance(){
+    document.getElementById("attendanceBox").style.display="block";
+    let html="<tr><th>Roll</th><th>Name</th><th>Present</th></tr>";
+    students.forEach(s=>{
+        let checked = "";
+        html+=`<tr><td>${s[0]}</td><td>${s[1]}</td><td><input type="checkbox" id="d-${s[0]}" ${attendanceData[`${s[0]}-${document.getElementById("dayInput").value}`]=="✔"?"checked":""}></td></tr>`;
+    });
+    document.getElementById("dailyTable").innerHTML=html;
+}
+function closeBox(){ document.getElementById("attendanceBox").style.display="none"; }
+
+function submitAttendance(){
+    let day = document.getElementById("dayInput").value;
+    if(!day) return alert("Enter date");
+    if(document.getElementById("offDay").checked){
+        offDays.add(Number(day));
+        localStorage.setItem("offDays", JSON.stringify(Array.from(offDays)));
+        document.getElementById("h"+day).classList.add("off");
+        closeBox();
+        generateTable();
+        return;
+    }
+    students.forEach(s=>{
+        let present = document.getElementById("d-"+s[0]).checked;
+        let key = `${s[0]}-${day}`;
+        attendanceData[key] = present ? "✔" : "✖";
+    });
+    localStorage.setItem("attendanceData", JSON.stringify(attendanceData));
+    closeBox();
+    generateTable();
+}
+
+function calculate(){
+    let rows=document.querySelectorAll("#body tr");
+    rows.forEach(row=>{
+        let cells=row.querySelectorAll("td");
+        let total=0, present=0;
+        cells.forEach((c,i)=>{
+            if(i<2 || i==cells.length-1) return;
+            let dayIndex=i-1;
+            if(offDays.has(dayIndex)) return;
+            if(c.innerText=="✔") present++;
+            total++;
+        });
+        let percent = total ? ((present/total)*100).toFixed(1) : 0;
+        row.querySelector(".percent").innerText = percent+"%";
+    });
+}
+
+function downloadPDF(){
+    const { jsPDF } = window.jspdf;
+    let pdf = new jsPDF('l', 'mm', 'a4');
+    let element = document.getElementById("mainTable");
+    let month = document.getElementById("month").value;
+    let year = document.getElementById("year").value;
+
+    html2canvas(element, { scale: 2 }).then(canvas => {
+        let imgData = canvas.toDataURL('image/png');
+        let imgWidth = 280;
+        let pageHeight = 190;
+        let imgHeight = canvas.height * imgWidth / canvas.width;
+        let heightLeft = imgHeight;
+        let position = 20;
+
+        pdf.setFontSize(16);
+        pdf.text(`BS Physics 8th Semester Attendance (${month} ${year})`, 10, 10);
+
+        pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+
+        while (heightLeft > 0){
+            position = heightLeft - imgHeight + 20;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+        }
+
+        pdf.save("Full_Attendance.pdf");
+    });
+}
+
+function downloadExcel(){
+    let table = document.getElementById("mainTable").outerHTML;
+    let month = document.getElementById("month").value;
+    let year = document.getElementById("year").value;
+    let html = `<html><head><meta charset="UTF-8"></head><body><h2>BS Physics 8th Semester Attendance (${month} ${year})</h2>${table}</body></html>`;
+    let blob = new Blob([html], { type: "application/vnd.ms-excel" });
+    let link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = month + "_attendance.xls";
+    link.click();
+}
+
+// INIT
+generateTable();
+</script>
+
+</body>
+</html>
